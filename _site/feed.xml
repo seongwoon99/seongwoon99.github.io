@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Seong Woon's Log</title>
+    <description>그냥 적자</description>
+    <link>http://localhost:4000/</link>
+    <atom:link href="http://localhost:4000/feed.xml" rel="self" type="application/rss+xml"/>
+    <pubDate>Sat, 05 Nov 2022 02:24:34 +0900</pubDate>
+    <lastBuildDate>Sat, 05 Nov 2022 02:24:34 +0900</lastBuildDate>
+    <generator>Jekyll v4.3.1</generator>
+    
+      <item>
+        <title>SwAV을 이용한 ResNet Fine-tuning</title>
+        <description>&lt;h3 id=&quot;swav-이란&quot;&gt;SwAV 이란&lt;/h3&gt;
+&lt;ul&gt;
+  &lt;li&gt;SwAV은 Contrastive Learing 기반의 Self Supervised Learning 방법 중 하나로 label이 없는 데이터에 대하여 훈련을 진행할 수 있다.&lt;/li&gt;
+  &lt;li&gt;Contrastive Learning은 입력 샘플 간의 비교를 통해 학습을 수행하는 방법으로, SwAV을 통해서는 unlabeled 이미지에 대한 feature를 학습할 수 있다.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;swav-code&quot;&gt;SwAV Code&lt;/h3&gt;
+
+&lt;h4 id=&quot;trainpy-사전-처리&quot;&gt;train.py 사전 처리&lt;/h4&gt;
+&lt;ul&gt;
+  &lt;li&gt;SwAV으로 생성된 pth파일의 경우 multi gpu를 사용하기 때문에 레이어 이름에 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;module&lt;/code&gt;이란 명칭이 포함된다.&lt;/li&gt;
+  &lt;li&gt;resnet으로 fine-tuning하기 위해 편의상 레이어 이름에 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;module&lt;/code&gt; 이 포함되지 않는 pth 파일을 저장하기 위해 다음과 같이 수정한다.&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;main_swav.py&lt;/code&gt; 내부 속 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;259 line&lt;/code&gt; 부근에 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;state_dict&lt;/code&gt;의 내용을 수정한다.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-python highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c1&quot;&gt;# save checkpoints  수정!!
+&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;args&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;rank&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;save_dict&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;s&quot;&gt;&quot;epoch&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;epoch&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+        &lt;span class=&quot;s&quot;&gt;&quot;state_dict&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;model&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;module&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;state_dict&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(),&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;# module # 다 가져와서 거기서 매칭!
+&lt;/span&gt;        &lt;span class=&quot;s&quot;&gt;&quot;optimizer&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;optimizer&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;state_dict&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(),&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h4 id=&quot;training&quot;&gt;Training&lt;/h4&gt;
+&lt;h5 id=&quot;trainpy의-주요-인자&quot;&gt;train.py의 주요 인자&lt;/h5&gt;
+&lt;ul&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;--data_pth&lt;/code&gt; : 이미지 경로를 입력한다. 이때 해당 경로의 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;하위 폴더를 추가로 만들어 저장한다.&lt;/code&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;--epochs&lt;/code&gt; : 400 또는 800을 추천하는 듯하다.&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;--dump_path&lt;/code&gt; : output 저장할 경로, pth, queue, stats 등의 파일이 저장된다.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;python -m torch.distributed.launch --nproc_per_node=8 main_swav.py \
+--data_path ~/image_folder \
+--epochs 800 \
+--base_lr 0.6 \
+--final_lr 0.0006 \
+--warmup_epochs 0 \
+--batch_size 32 \
+--size_crops 224 96 \
+--nmb_crops 2 6 \
+--min_scale_crops 0.14 0.05 \
+--max_scale_crops 1. 0.14 \
+--use_fp16 true \
+--freeze_prototypes_niters 5005 \
+--queue_length 3840 \
+--epoch_queue_starts 15 \
+--dump_path ~/output_dir \ 
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h5 id=&quot;imagenet-가중치-탑재-후-전이학습&quot;&gt;ImageNet 가중치 탑재 후 전이학습&lt;/h5&gt;
+&lt;ul&gt;
+  &lt;li&gt;SwAV에서는 ImageNet으로 학습된 가중치를 제공한다.&lt;/li&gt;
+  &lt;li&gt;ImageNet 데이터로 학습된 가중치 이후로 전이학습을 진행하기 위해서는 다음과 같은 코드를 추가한다.&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;main_swav.py&lt;/code&gt; 내부의 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;nn.parallel.DistributeDataParallel()&lt;/code&gt; 코드 부분 하단에 위치시킨다.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-python highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c1&quot;&gt;# wrap model
+&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;model&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;nn&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;parallel&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;DistributedDataParallel&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;model&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;device_ids&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;args&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;gpu_to_work_on&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;c1&quot;&gt;# # ImageNet pretraining 진행
+&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;swav_800ep_pretrain_Imagenet&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;torch&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;hub&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;load_state_dict_from_url&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;'https://dl.fbaipublicfiles.com/deepcluster/swav_800ep_pretrain.pth.tar'&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;model&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;load_state_dict&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;swav_800ep_pretrain_Imagenet&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+</description>
+        <pubDate>Fri, 04 Nov 2022 00:00:00 +0900</pubDate>
+        <link>http://localhost:4000/project/swav_resnet_finetuning/</link>
+        <guid isPermaLink="true">http://localhost:4000/project/swav_resnet_finetuning/</guid>
+        
+        <category>self_supervised</category>
+        
+        <category>swav</category>
+        
+        <category>fine-tuning</category>
+        
+        
+        <category>Project</category>
+        
+      </item>
+    
+      <item>
+        <title>Useful Markdown Grammar</title>
+        <description>&lt;h2 id=&quot;notice&quot;&gt;Notice&lt;/h2&gt;
+
+&lt;p class=&quot;notice--info&quot;&gt;&lt;strong&gt;Note:&lt;/strong&gt; &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;search: false&lt;/code&gt; only works to exclude posts when using &lt;strong&gt;Lunr&lt;/strong&gt; as a search provider.&lt;/p&gt;
+
+&lt;h2 id=&quot;link&quot;&gt;Link&lt;/h2&gt;
+
+</description>
+        <pubDate>Fri, 04 Nov 2022 00:00:00 +0900</pubDate>
+        <link>http://localhost:4000/markdown/markdown_g/</link>
+        <guid isPermaLink="true">http://localhost:4000/markdown/markdown_g/</guid>
+        
+        <category>stylegan</category>
+        
+        <category>code</category>
+        
+        <category>project</category>
+        
+        
+        <category>Markdown</category>
+        
+      </item>
+    
+      <item>
+        <title>StyleGAN2-ADA Train 메뉴얼</title>
+        <description>&lt;ul&gt;
+  &lt;li&gt;Preparing Datasets&lt;/li&gt;
+  &lt;li&gt;Training new networks&lt;/li&gt;
+  &lt;li&gt;Generate Image&lt;/li&gt;
+  &lt;li&gt;Projecting images to latent space&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;preparing-datasets&quot;&gt;Preparing Datasets&lt;/h2&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;StyleGAN2-ADA를 train하기 전에 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;.tfrecords&lt;/code&gt; 형식으로 전처리를 진행한다.&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;jpg, png&lt;/code&gt; 와 같은 이미지 파일 형식을 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;.tfrecords&lt;/code&gt; 형식의 확장자로 변환한다.&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;dataset_too.py&lt;/code&gt; 내부의 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;create_from_images&lt;/code&gt;를 호출한다.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-python highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c1&quot;&gt;# 실제 실행 코드
+&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;python&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dataset_tool&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;py&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;create_from_images&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;~/&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;tfrecords_folder&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;~/&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;image_folder&lt;/span&gt;
+
+&lt;span class=&quot;c1&quot;&gt;# 설명용 코드 (실행 x)
+# 인자는 2개로 tfrecords 파일을 저장할 빈 폴더와 이미지가 담긴 폴더 경로를 입력한다. 
+&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;python&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dataset_tool&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;py&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;create_from_images&lt;/span&gt;  
+    &lt;span class=&quot;o&quot;&gt;~/&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;tfrecords_folder&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;  &lt;span class=&quot;c1&quot;&gt;# tfrecord 파일을 저장할 빈 폴더 경로 
+&lt;/span&gt;    &lt;span class=&quot;o&quot;&gt;~/&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;image_folder&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;# 이미지 폴더 경로
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;training-new-networks&quot;&gt;Training new networks&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;train 인자를 설정하고 훈련을 진행한다. 이때 경우에 따라서 경로를 미리 만들어야 할 수도 있다. (가급적이면 미리 만들어 놓는 것을 추천한다. )&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;--out_dir&lt;/code&gt; : pkl 파일, 이미지 등 결과물이 저장된다.&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;--gpus&lt;/code&gt; : gpu 개수 설정 가능하다. colab에서 진행하는 경우 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;--gpus=1&lt;/code&gt;로 설정하고 진행해야 한다.&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;--data&lt;/code&gt; : tfrecord 경로를 지정한다.&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;--resume&lt;/code&gt; : 전이 학습 관련 옵션으로 특정 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;pkl&lt;/code&gt; 파일에 이어서 훈련을 진행하고 싶을 때 입력한다. (입력하지 않을 경우 해당 옵션을 제외하고 진행하면 된다.)&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;--kimg&lt;/code&gt; : epoch과 비슷한 개념으로 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Discriminator&lt;/code&gt; 가 한 번에 몇장의 이미지를 볼 지 설정하는 값이다. 해당 값에 도달할 때까지 훈련이 진행된다.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-python highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c1&quot;&gt;# 시험 코드로 `--dry-run` 옵션을 입력한다. 
+# 모델의 parse 옵션들을 출력한다.
+&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;python&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;train&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;py&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;--&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;outdir&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=~/&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;training&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;runs&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;--&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;gpus&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;--&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=~/&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;datasets&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;custom&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;--&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dry&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;run&lt;/span&gt;
+
+&lt;span class=&quot;c1&quot;&gt;# 본 train 코드
+&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;python&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;train&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;py&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;--&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;outdir&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=~/&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;results&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt; \
+     &lt;span class=&quot;o&quot;&gt;--&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;gpus&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;8&lt;/span&gt;\
+     &lt;span class=&quot;o&quot;&gt;--&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=~/&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;tfrecords_folder&lt;/span&gt; \
+     &lt;span class=&quot;o&quot;&gt;--&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;resume&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;https&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;//&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;nvlabs&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fi&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;cdn&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;nvidia&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;com&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;stylegan2&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;ada&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;pretrained&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;ffhq&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;pkl&lt;/span&gt;\
+     &lt;span class=&quot;o&quot;&gt;--&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;kimg&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;5000&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;generate-image&quot;&gt;Generate Image&lt;/h2&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;train.py&lt;/code&gt; 결과로 생성된 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;pkl&lt;/code&gt; 파일로 이미지를 생성한다.&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;seeds&lt;/code&gt; : 이미지 개수 조절이 가능하다. 예를들어 10개의 이미지를 생성할 경우 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;0-10&lt;/code&gt; 으로 입력한다.&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;network&lt;/code&gt; : &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;train.py&lt;/code&gt; 의 결과인 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;pkl&lt;/code&gt; 파일을 입력한다.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-python highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;python&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;generate_direction&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;py&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;--&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;trunc&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt; \
+  &lt;span class=&quot;o&quot;&gt;--&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;seeds&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;10&lt;/span&gt; \
+  &lt;span class=&quot;o&quot;&gt;--&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;network&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=~/&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;pkl&lt;/span&gt; \
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;projecting-images-to-latent-space&quot;&gt;Projecting images to latent space&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;projector.py&lt;/code&gt; 를 통해 원하는 이미지에 대한 latent vector를 얻을 수 있다.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;python projector.py --outdir=out --target=targetimg.png \
+    --network=~/.pkl
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;reference&quot;&gt;Reference&lt;/h3&gt;
+&lt;ul&gt;
+  &lt;li&gt;&lt;a href=&quot;https://github.com/NVlabs/stylegan2-ada&quot;&gt;https://github.com/NVlabs/stylegan2-ada&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        <pubDate>Fri, 04 Nov 2022 00:00:00 +0900</pubDate>
+        <link>http://localhost:4000/image_to_image_translation/stylegan2ada_manual/</link>
+        <guid isPermaLink="true">http://localhost:4000/image_to_image_translation/stylegan2ada_manual/</guid>
+        
+        <category>stylegan</category>
+        
+        <category>code</category>
+        
+        <category>project</category>
+        
+        
+        <category>Image_to_Image_Translation</category>
+        
+      </item>
+    
+      <item>
+        <title>StyleGAN2-ADA Direction 적용</title>
+        <description>&lt;h2 id=&quot;direction-이란&quot;&gt;Direction 이란&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;특정 속성(Age, Gender, Smile)에 해당하는 Latent 공간 정보를 의미한다.&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Direction&lt;/code&gt; 을 통해 한 가지 속성에 대한 변환된 값을 얻을 수 있다.&lt;/li&gt;
+&lt;/ul&gt;
+
+</description>
+        <pubDate>Fri, 04 Nov 2022 00:00:00 +0900</pubDate>
+        <link>http://localhost:4000/image_to_image_translation/stylegan2ada_direction/</link>
+        <guid isPermaLink="true">http://localhost:4000/image_to_image_translation/stylegan2ada_direction/</guid>
+        
+        <category>stylegan</category>
+        
+        <category>code</category>
+        
+        <category>project</category>
+        
+        
+        <category>Image_to_Image_Translation</category>
+        
+      </item>
+    
+  </channel>
+</rss>
